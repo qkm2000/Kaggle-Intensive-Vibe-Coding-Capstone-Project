@@ -175,6 +175,11 @@ class Orchestrator:
             "spending": AnalystAgent(),
         }
 
+    @property
+    def agents(self) -> dict:
+        """The intent -> specialist mapping (reused by the local-LLM backend)."""
+        return self._agents
+
     def route(self, question: str):
         """Return the specialist agent that will handle ``question``."""
         return self._agents[classify_intent(question)]

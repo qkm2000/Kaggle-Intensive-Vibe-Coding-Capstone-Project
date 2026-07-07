@@ -73,8 +73,15 @@ contract, selected automatically by whether `GOOGLE_API_KEY` is set:
 
 | Backend | Module | When | Uses |
 |---|---|---|---|
-| Live Gemini multi-agent | `agents.py` | key present | ADK `LlmAgent` + `McpToolset` |
-| Deterministic orchestrator | `orchestrator.py` | no key | keyword routing + same tools |
+| Live Gemini multi-agent | `agents.py` | Gemini key present | ADK `LlmAgent` + `McpToolset` |
+| Local / private LLM (hybrid) | `local_llm.py` | `LEDGERLENS_LLM_BASE_URL` set | any OpenAI-compatible server (vLLM, LM Studio, ...) |
+| Deterministic orchestrator | `orchestrator.py` | nothing configured | keyword routing + same tools |
+
+The **local-LLM** backend is a privacy-friendly hybrid: the deterministic
+router picks a specialist and runs the *real* tool, then the local model
+composes the answer grounded strictly in that tool output (no hallucinated
+numbers). It suits self-hosted models that don't emit OpenAI `tool_calls`, and
+means **no financial data ever leaves your own infrastructure**.
 
 This is what makes the project **key-optional**: the whole thing (and the entire
 test-suite) runs offline, while a single env var upgrades it to a live
@@ -126,6 +133,7 @@ Financial data is sensitive, so security is layered, not bolted on
 │   ├── tools.py          # the 4 domain tools (validation + egress masking)
 │   ├── mcp_server.py     # custom MCP server (FastMCP, stdio)
 │   ├── agents.py         # live Google ADK multi-agent system + guardrail
+│   ├── local_llm.py      # hybrid backend for a local OpenAI-compatible LLM
 │   ├── orchestrator.py   # deterministic key-free multi-agent fallback
 │   ├── config.py         # env-driven settings (key-optional)
 │   └── cli.py            # `ledgerlens` console entry point
@@ -148,8 +156,20 @@ conda activate ledgerlens
 # 2. install (base runtime + tests). Add ,adk for the live Gemini path.
 pip install -e ".[dev,adk]"
 
-# 3. (optional) enable the live agent
+# 3. (optional) enable a live agent
 cp .env.example .env      # then paste a free key from aistudio.google.com
+```
+
+### Run on a local / private LLM (no cloud key)
+
+Point LedgerLens at any OpenAI-compatible server (base URL must include `/v1`):
+
+```bash
+pip install -e ".[local]"                 # installs LiteLLM
+export LEDGERLENS_LLM_BASE_URL="https://your-host:12000/v1"
+export LEDGERLENS_LLM_API_KEY="your-key"  # or any placeholder if unauthenticated
+export LEDGERLENS_MODEL="YourModelName"   # the served model id
+ledgerlens "what subscriptions am I paying for?"
 ```
 
 ## 8. Usage

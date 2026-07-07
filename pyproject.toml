@@ -23,6 +23,8 @@ dependencies = [
 
 [project.optional-dependencies]
 adk = ["google-adk>=1.0.0"]
+# Talk to a local / self-hosted OpenAI-compatible model (vLLM, LM Studio, ...).
+local = ["litellm>=1.40.0"]
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]

@@ -45,6 +45,10 @@ class Settings:
     model: str
     google_api_key: str | None
     budgets: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BUDGETS))
+    # Optional OpenAI-compatible endpoint (e.g. a local vLLM server). When set,
+    # LedgerLens routes through the local-LLM concierge instead of Gemini.
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
 
     @property
     def use_real_llm(self) -> bool:
@@ -55,6 +59,15 @@ class Settings:
         """
         return bool(self.google_api_key)
 
+    @property
+    def use_local_llm(self) -> bool:
+        """True when an OpenAI-compatible base URL is configured.
+
+        Takes precedence over Gemini in the CLI so you can point LedgerLens at
+        a private/local model with no cloud key at all.
+        """
+        return bool(self.llm_base_url)
+
 
 def load_settings() -> Settings:
     """Build :class:`Settings` from environment variables with safe defaults."""
@@ -63,4 +76,15 @@ def load_settings() -> Settings:
     # Accept either GOOGLE_API_KEY or GEMINI_API_KEY; treat blank as unset.
     api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
     api_key = api_key.strip() if api_key else None
-    return Settings(data_path=data_path, model=model, google_api_key=api_key or None)
+    # OpenAI-compatible local endpoint (base URL must include the /v1 suffix).
+    llm_base_url = os.environ.get("LEDGERLENS_LLM_BASE_URL")
+    llm_base_url = llm_base_url.strip() if llm_base_url else None
+    llm_api_key = os.environ.get("LEDGERLENS_LLM_API_KEY")
+    llm_api_key = llm_api_key.strip() if llm_api_key else None
+    return Settings(
+        data_path=data_path,
+        model=model,
+        google_api_key=api_key or None,
+        llm_base_url=llm_base_url or None,
+        llm_api_key=llm_api_key or None,
+    )

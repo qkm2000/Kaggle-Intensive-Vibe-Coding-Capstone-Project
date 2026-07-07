@@ -22,16 +22,27 @@ from .tools import FinanceTools
 
 
 def _build_backend():
-    """Return an object with ``ask(question) -> AgentResponse`` and a label."""
+    """Return an object with ``ask(question) -> AgentResponse`` and a label.
+
+    Backend precedence: local OpenAI-compatible LLM -> Gemini ADK -> offline.
+    """
     settings = load_settings()
+    store = TransactionStore.from_csv(settings.data_path)
+    tools = FinanceTools(store, settings.budgets)
+
+    if settings.use_local_llm:
+        # Local/self-hosted model (e.g. vLLM). Hybrid: deterministic tools +
+        # LLM routing & answer composition. See local_llm.py for the rationale.
+        from .local_llm import LocalLlmConcierge
+
+        return LocalLlmConcierge(tools, settings), f"local LLM ({settings.model} @ {settings.llm_base_url})"
+
     if settings.use_real_llm:
         # Import lazily: only touch ADK when we actually intend to use it.
         from .agents import AdkConcierge
 
         return AdkConcierge(settings), f"Gemini ADK ({settings.model})"
 
-    store = TransactionStore.from_csv(settings.data_path)
-    tools = FinanceTools(store, settings.budgets)
     return Orchestrator(tools), "offline orchestrator (no API key)"
 
 
