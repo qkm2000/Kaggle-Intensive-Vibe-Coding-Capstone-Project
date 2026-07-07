@@ -6,7 +6,14 @@ when the model goes off-script, grounded composition, and graceful degradation
 when the model is unreachable.
 """
 
-from ledgerlens.local_llm import LocalLlmConcierge
+from ledgerlens.local_llm import LocalLlmConcierge, strip_reasoning
+
+
+def test_strip_reasoning_removes_think_blocks():
+    assert strip_reasoning("<think>plan the answer</think>Final answer.") == "Final answer."
+    # Dangling closing tag (reasoning got truncated) -> keep only the tail.
+    assert strip_reasoning("some reasoning</think>The answer") == "The answer"
+    assert strip_reasoning("no tags here") == "no tags here"
 
 
 class FakeClient:
@@ -47,6 +54,8 @@ def test_llm_routing_selects_specialist(real_tools):
     # Composition step was shown the real tool JSON (grounding).
     compose_msg = client.calls[1][1]["content"]
     assert "subscriptions" in compose_msg
+    # ...and the essential-vs-discretionary rule was injected into the system prompt.
+    assert "discretionary" in client.calls[1][0]["content"].lower()
 
 
 def test_routing_falls_back_to_keywords_on_garbage(real_tools):

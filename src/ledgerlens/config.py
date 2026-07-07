@@ -25,6 +25,13 @@ DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "transactions.csv"
 
 # Monthly budget targets (USD) per spending category. These would normally be
 # user-configured; kept here as sensible defaults for the demo.
+# Categories that are essential recurring *bills* rather than discretionary
+# subscriptions. The subscription hunter must never suggest cancelling these —
+# it's how we avoid "just cancel your electricity to save money" advice.
+ESSENTIAL_CATEGORIES: frozenset[str] = frozenset(
+    {"Utilities", "Groceries", "Transport", "Insurance", "Rent", "Housing"}
+)
+
 DEFAULT_BUDGETS: dict[str, float] = {
     "Groceries": 500.0,
     "Dining": 250.0,

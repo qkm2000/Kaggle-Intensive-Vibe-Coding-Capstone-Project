@@ -42,6 +42,21 @@ def test_detect_subscriptions_reports_savings(real_tools):
     assert "TechWorld" not in merchants
 
 
+def test_subscriptions_classified_essential_vs_discretionary(real_tools):
+    result = real_tools.detect_subscriptions()
+    kind = {s["merchant"]: s["kind"] for s in result["subscriptions"]}
+    # Bills you can't cancel are flagged essential...
+    assert kind["PowerCo"] == "essential"      # electricity
+    assert kind["FreshMart"] == "essential"    # groceries
+    assert kind["Metro Transit"] == "essential"  # transit
+    # ...cancellable subscriptions are discretionary.
+    assert kind["Netflix"] == "discretionary"
+    assert kind["Spotify"] == "discretionary"
+    # Savings headline is the discretionary subset only, and smaller than total.
+    assert 0 < result["discretionary_annual"] < result["total_annual"]
+    assert result["discretionary_count"] < result["count"]
+
+
 def test_budget_status_shape(real_tools):
     result = real_tools.budget_status()
     assert result["month"] == "latest"

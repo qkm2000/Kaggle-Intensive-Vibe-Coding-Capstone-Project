@@ -20,6 +20,7 @@ offline backends, so the CLI treats them identically.
 from __future__ import annotations
 
 import json
+import re
 
 from .config import Settings
 from .orchestrator import Orchestrator, classify_intent
@@ -27,6 +28,32 @@ from .response import AgentResponse
 from .tools import FinanceTools
 
 _VALID_INTENTS = ("spending", "subscriptions", "budget")
+
+# Reasoning models (like the target vLLM model) may emit <think>...</think>
+# blocks in the content. Strip them so they never reach the user.
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove <think> reasoning blocks (matched or dangling) from model output."""
+    text = _THINK_BLOCK.sub("", text)
+    if "</think>" in text:  # dangling close tag with no opener -> keep the tail
+        text = text.rsplit("</think>", 1)[-1]
+    return text.replace("<think>", "").strip()
+
+
+# Extra rules for the subscription specialist so the model distinguishes a
+# cancellable subscription from an essential bill (and never suggests dropping
+# the electricity). Relies on the 'kind' field the tool attaches to each item.
+_SUBSCRIPTION_GUIDANCE = (
+    " Each item has a 'kind' field. Items with kind 'essential' (utilities, "
+    "groceries, transport, insurance, housing) are recurring BILLS the user "
+    "cannot simply cancel — NEVER recommend dropping these; only note them as "
+    "fixed costs if relevant. Only ever recommend cancelling items with kind "
+    "'discretionary' (e.g. streaming, music, news, cloud storage, gym, "
+    "software). Respect anything the user says they want to keep, and compute "
+    "any savings figure from the discretionary items only."
+)
 
 
 class LocalLlmClient:
@@ -54,7 +81,7 @@ class LocalLlmClient:
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        return (resp.choices[0].message.content or "").strip()
+        return strip_reasoning(resp.choices[0].message.content or "")
 
 
 class LocalLlmConcierge:
@@ -93,17 +120,18 @@ class LocalLlmConcierge:
 
     def _compose(self, question: str, agent_name: str, data: dict) -> str:
         """Ask the model to phrase an answer grounded strictly in tool output."""
+        system = (
+            "You are LedgerLens, a friendly and concise personal-finance "
+            "concierge. Answer the user's question using ONLY the JSON data "
+            "provided. All amounts are USD. Never invent numbers or "
+            "transactions that are not in the data. If the data is empty, "
+            "say you couldn't find anything relevant."
+        )
+        # The subscription specialist needs the essential-vs-discretionary rules.
+        if agent_name.startswith("SubscriptionHunter"):
+            system += _SUBSCRIPTION_GUIDANCE
         prompt = [
-            {
-                "role": "system",
-                "content": (
-                    "You are LedgerLens, a friendly and concise personal-finance "
-                    "concierge. Answer the user's question using ONLY the JSON data "
-                    "provided. All amounts are USD. Never invent numbers or "
-                    "transactions that are not in the data. If the data is empty, "
-                    "say you couldn't find anything relevant."
-                ),
-            },
+            {"role": "system", "content": system},
             {
                 "role": "user",
                 "content": (
@@ -112,7 +140,8 @@ class LocalLlmConcierge:
                 ),
             },
         ]
-        return self._client.chat(prompt, max_tokens=400, temperature=0.3)
+        # Generous cap so long tabular answers aren't truncated mid-table.
+        return self._client.chat(prompt, max_tokens=800, temperature=0.3)
 
     def ask(self, question: str) -> AgentResponse:
         intent = self._route(question)

@@ -150,9 +150,12 @@ def build_agent(settings: Settings | None = None, *, tools: FinanceTools | None 
         model=model,
         description="Finds recurring charges / subscriptions and savings.",
         instruction=(
-            "Call detect_subscriptions and summarise the recurring charges. "
-            "Highlight small, easily-forgotten subscriptions and state the "
-            "annual savings from cancelling them."
+            "Call detect_subscriptions and summarise the recurring charges. Use "
+            "each item's 'kind' field: NEVER suggest cancelling 'essential' items "
+            "(utilities, groceries, transport, insurance) — treat them as fixed "
+            "bills. Only recommend dropping 'discretionary' items, highlight the "
+            "small easily-forgotten ones, and base savings on discretionary items "
+            "only. Respect anything the user says they want to keep."
         ),
         tools=hunter_tools,
         before_tool_callback=_tool_guardrail,

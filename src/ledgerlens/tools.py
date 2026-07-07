@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+from .config import ESSENTIAL_CATEGORIES
 from .data_store import TransactionStore
 from .models import Transaction
 from .security import (
@@ -103,15 +104,20 @@ class FinanceTools:
 
     # --- tool: detect_subscriptions ------------------------------------ #
     def detect_subscriptions(self, min_occurrences: int = 3) -> dict:
-        """Find recurring charges (likely subscriptions) and their annual cost."""
+        """Find recurring charges and label each essential vs discretionary.
+
+        Each returned charge carries a ``kind`` ("essential" | "discretionary")
+        so the agent can tell a cancellable subscription (Netflix, Spotify) from
+        a fixed bill (electricity, groceries, transit) and never advise dropping
+        the latter. Savings headlines use the *discretionary* subset only.
+        """
         min_occ = validate_limit(min_occurrences, default=3)
         subs = self._store.detect_subscriptions(min_occurrences=min_occ)
-        total_annual = round(sum(s.annualized for s in subs), 2)
-        return {
-            "count": len(subs),
-            "total_monthly": round(sum(s.monthly_amount for s in subs), 2),
-            "total_annual": total_annual,
-            "subscriptions": [
+
+        items = []
+        for s in subs:
+            essential = s.category in ESSENTIAL_CATEGORIES
+            items.append(
                 {
                     "merchant": s.merchant,
                     "category": s.category,
@@ -120,9 +126,21 @@ class FinanceTools:
                     "occurrences": s.occurrences,
                     "first_date": s.first_date.isoformat(),
                     "last_date": s.last_date.isoformat(),
+                    "kind": "essential" if essential else "discretionary",
+                    "essential": essential,
                 }
-                for s in subs
-            ],
+            )
+
+        discretionary = [i for i in items if not i["essential"]]
+        return {
+            "count": len(items),
+            "total_monthly": round(sum(i["monthly_amount"] for i in items), 2),
+            "total_annual": round(sum(i["annualized"] for i in items), 2),
+            # Only these are safe to suggest cancelling.
+            "discretionary_count": len(discretionary),
+            "discretionary_monthly": round(sum(i["monthly_amount"] for i in discretionary), 2),
+            "discretionary_annual": round(sum(i["annualized"] for i in discretionary), 2),
+            "subscriptions": items,
         }
 
     # --- tool: budget_status ------------------------------------------- #

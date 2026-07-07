@@ -63,21 +63,34 @@ class SubscriptionHunterAgent:
         subs = data["subscriptions"]
         if not subs:
             return AgentResponse(self.name, "I couldn't find any recurring charges.", data)
+
+        discretionary = [s for s in subs if not s["essential"]]
+        essentials = [s for s in subs if s["essential"]]
+
         lines = [
             f"I found {data['count']} recurring charges totalling "
-            f"{_money(data['total_monthly'])}/month ({_money(data['total_annual'])}/year):"
+            f"{_money(data['total_monthly'])}/month ({_money(data['total_annual'])}/year)."
         ]
-        for s in subs:
+        if discretionary:
             lines.append(
-                f"  • {s['merchant']} — {_money(s['monthly_amount'])}/mo "
-                f"({s['category']}, seen {s['occurrences']}×)"
+                f"Discretionary subscriptions you could review "
+                f"({_money(data['discretionary_monthly'])}/mo, "
+                f"{_money(data['discretionary_annual'])}/yr):"
             )
-        cheapest = min(subs, key=lambda s: s["monthly_amount"])
-        lines.append(
-            f"Tip: '{cheapest['merchant']}' is easy to forget at "
-            f"{_money(cheapest['monthly_amount'])}/mo — cancelling it saves "
-            f"{_money(cheapest['annualized'])}/year."
-        )
+            for s in discretionary:
+                lines.append(
+                    f"  • {s['merchant']} — {_money(s['monthly_amount'])}/mo ({s['category']})"
+                )
+        if essentials:
+            names = ", ".join(s["merchant"] for s in essentials)
+            lines.append(f"Essential bills (keep — not cancellable): {names}.")
+        if discretionary:
+            cheapest = min(discretionary, key=lambda s: s["monthly_amount"])
+            lines.append(
+                f"Tip: '{cheapest['merchant']}' is easy to forget at "
+                f"{_money(cheapest['monthly_amount'])}/mo — cancelling it saves "
+                f"{_money(cheapest['annualized'])}/year."
+            )
         return AgentResponse(self.name, "\n".join(lines), data)
 
 
